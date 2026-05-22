@@ -4,6 +4,7 @@ import tkinter as tk
 from tkinter import colorchooser, filedialog
 import json
 import os
+import traceback
 from datetime import datetime
 from PIL import Image, ImageTk
 
@@ -20,6 +21,8 @@ DEFAULTS = {
     "always_on_top": False,
     "window_x": None,
     "window_y": None,
+    "window_width": 420,
+    "window_height": 300,
 }
 
 
@@ -49,16 +52,16 @@ class CountdownWidget:
         self.root.attributes("-transparentcolor", "#010101")
 
         self.scale = self.settings["widget_scale"] / 100.0
-        self.width = int(420 * self.scale)
-        self.height = int(300 * self.scale)
+        self.width = self.settings.get("window_width", 420)
+        self.height = self.settings.get("window_height", 300)
         self.root.geometry(f"{self.width}x{self.height}")
+        self.root.minsize(200, 140)
 
         wx = self.settings.get("window_x")
         wy = self.settings.get("window_y")
         if wx is not None and wy is not None:
             self.root.geometry(f"+{wx}+{wy}")
         else:
-            # 首次运行居中显示
             self.root.update_idletasks()
             sw = self.root.winfo_screenwidth()
             sh = self.root.winfo_screenheight()
@@ -76,52 +79,54 @@ class CountdownWidget:
         # 圆角效果：用4个弧遮住四角
         self._draw_corners()
 
-        # 背景图
+        # 确保窗口尺寸已生效，再加载背景
+        self.root.update_idletasks()
         self._bg_photo = None
         self._bg_img_obj = None
         self._apply_bg()
 
-        # ---- 叠加暗层 (用 Label 模拟) ----
-        overlay_alpha = int(self.settings["overlay_opacity"] / 100 * 220)
-        overlay_color = f"#{overlay_alpha:02x}{overlay_alpha:02x}{overlay_alpha:02x}"
-        self.overlay_lbl = tk.Label(self.root, bg=overlay_color, bd=0)
+        # ---- 叠加暗层 ----
+        self.overlay_lbl = tk.Label(self.root, bg="#111111", bd=0)
         self.overlay_lbl.place(x=0, y=0, relwidth=1, relheight=1)
+        self._update_overlay()
         self.canvas.tag_raise("corners")
 
         # ---- 标题栏 (拖拽区) ----
-        title_bar = tk.Frame(self.root, bg="#111111", bd=0, cursor="fleur")
-        title_bar.place(x=0, y=0, width=self.width, height=30)
-        title_bar.bind("<Button-1>", self._drag_start)
-        title_bar.bind("<B1-Motion>", self._drag_move)
+        self.title_bar = tk.Frame(self.root, bg="#111111", bd=0, cursor="fleur")
+        self.title_bar.place(x=0, y=0, relwidth=1, height=30)
+        self.title_bar.bind("<Button-1>", self._drag_start)
+        self.title_bar.bind("<B1-Motion>", self._drag_move)
 
-        tk.Label(title_bar, text="Countdown", fg="#777777", bg="#111111",
+        tk.Label(self.title_bar, text="Countdown", fg="#777777", bg="#111111",
                  font=("Microsoft YaHei", 9)).place(x=10, y=5)
 
-        # 按钮
-        self.pin_btn = tk.Label(title_bar, text="📍", fg="#aaaaaa", bg="#111111",
+        # 按钮容器 (靠右)
+        btn_frame = tk.Frame(self.title_bar, bg="#111111")
+        btn_frame.place(relx=1.0, x=-108, y=3, width=100, height=24, anchor="ne")
+
+        self.pin_btn = tk.Label(btn_frame, text="📍", fg="#aaaaaa", bg="#111111",
                                 font=("", 10), cursor="hand2")
-        self.pin_btn.place(x=self.width - 105, y=3, width=24, height=22)
+        self.pin_btn.pack(side="right", padx=1)
         self.pin_btn.bind("<Button-1>", lambda e: self._toggle_pin())
         if self.settings.get("always_on_top"):
             self.pin_btn.configure(text="📌", fg="#ffffff")
-
         self._bind_hover(self.pin_btn, "#333333")
 
-        settings_btn = tk.Label(title_bar, text="⚙", fg="#aaaaaa", bg="#111111",
+        settings_btn = tk.Label(btn_frame, text="⚙", fg="#aaaaaa", bg="#111111",
                                 font=("", 11), cursor="hand2")
-        settings_btn.place(x=self.width - 78, y=3, width=24, height=22)
+        settings_btn.pack(side="right", padx=1)
         settings_btn.bind("<Button-1>", lambda e: self._open_settings())
         self._bind_hover(settings_btn, "#333333")
 
-        min_btn = tk.Label(title_bar, text="─", fg="#aaaaaa", bg="#111111",
+        min_btn = tk.Label(btn_frame, text="─", fg="#aaaaaa", bg="#111111",
                            font=("", 11), cursor="hand2")
-        min_btn.place(x=self.width - 52, y=3, width=24, height=22)
+        min_btn.pack(side="right", padx=1)
         min_btn.bind("<Button-1>", lambda e: self.root.iconify())
         self._bind_hover(min_btn, "#333333")
 
-        close_btn = tk.Label(title_bar, text="✕", fg="#aaaaaa", bg="#111111",
+        close_btn = tk.Label(btn_frame, text="✕", fg="#aaaaaa", bg="#111111",
                              font=("", 10), cursor="hand2")
-        close_btn.place(x=self.width - 28, y=3, width=24, height=22)
+        close_btn.pack(side="right", padx=1)
         close_btn.bind("<Button-1>", lambda e: self._on_close())
         self._bind_hover(close_btn, "#e81123", "#333333")
 
@@ -142,9 +147,21 @@ class CountdownWidget:
             self.root, text="", fg=self.settings["text_color"], bg="#111111",
             font=("Microsoft YaHei", int(11 * self.scale)), bd=0,
         )
-        # 放在倒计时下方
         info_y = self._countdown_y + self._countdown_block_h + int(14 * self.scale)
-        self.target_info_lbl.place(x=0, y=info_y, width=self.width)
+        self.target_info_lbl.place(x=0, y=info_y, relwidth=1)
+
+        # ---- 边缘缩放 ----
+        self._resize_edge = None
+        self._resize_x = 0
+        self._resize_y = 0
+        self._resize_w = 0
+        self._resize_h = 0
+        self._edge_width = 6
+
+        self.root.bind("<Motion>", self._on_edge_motion)
+        self.root.bind("<Button-1>", self._on_edge_press, add=True)
+        self.root.bind("<B1-Motion>", self._on_edge_drag, add=True)
+        self.root.bind("<ButtonRelease-1>", self._on_edge_release, add=True)
 
         # ---- 右键菜单 ----
         self._menu = None
@@ -204,18 +221,28 @@ class CountdownWidget:
         if not path or not os.path.exists(path):
             return
         try:
-            img = Image.open(path).resize((self.width, self.height), Image.LANCZOS)
+            w = self.root.winfo_width()
+            h = self.root.winfo_height()
+            if w < 10 or h < 10:
+                w, h = self.width, self.height
+            img = Image.open(path).resize((w, h), Image.LANCZOS)
             opacity = self.settings.get("bg_opacity", 40) / 100.0
             if img.mode != "RGBA":
                 img = img.convert("RGBA")
-            alpha = img.split()[3]
-            alpha = alpha.point(lambda p: int(p * opacity))
-            img.putalpha(alpha)
+            # 对整个图像应用不透明度
+            r, g, b, a = img.split()
+            a = a.point(lambda p: int(p * opacity))
+            img = Image.merge("RGBA", (r, g, b, a))
             self._bg_img_obj = img
             self._bg_photo = ImageTk.PhotoImage(img)
             self.canvas.create_image(0, 0, anchor="nw", image=self._bg_photo, tags="bg_img")
         except Exception:
-            pass
+            print("[背景加载失败]")
+            traceback.print_exc()
+
+    def _update_overlay(self):
+        alpha = int(self.settings["overlay_opacity"] / 100 * 220)
+        self.overlay_lbl.configure(bg=f"#{alpha:02x}{alpha:02x}{alpha:02x}")
 
     # ====== 圆角遮罩 ======
     def _draw_corners(self):
@@ -445,6 +472,7 @@ class CountdownWidget:
         )
         if path:
             self.settings["bg_image"] = path
+            save_settings(self.settings)
             self._apply_bg()
 
     def _clear_bg(self, parent):
@@ -457,8 +485,7 @@ class CountdownWidget:
         if key == "bg_opacity":
             self._apply_bg()
         elif key == "overlay_opacity":
-            alpha = int(value / 100 * 220)
-            self.overlay_lbl.configure(bg=f"#{alpha:02x}{alpha:02x}{alpha:02x}")
+            self._update_overlay()
 
     def _on_scale_change(self, value):
         self.settings["widget_scale"] = value
@@ -589,8 +616,108 @@ class CountdownWidget:
         y = self.root.winfo_y()
         self.settings["window_x"] = x
         self.settings["window_y"] = y
+        self.settings["window_width"] = self.root.winfo_width()
+        self.settings["window_height"] = self.root.winfo_height()
         save_settings(self.settings)
         self.root.destroy()
+
+    # ====== 边缘缩放 ======
+    def _get_edge(self, ex, ey):
+        """检测鼠标在窗口边缘的位置，返回方向字符串或 None"""
+        w = self.root.winfo_width()
+        h = self.root.winfo_height()
+        d = self._edge_width
+        l = ex <= d
+        r = ex >= w - d
+        t = ey <= d
+        b = ey >= h - d
+        if t and l:    return "nw"
+        if t and r:    return "ne"
+        if b and l:    return "sw"
+        if b and r:    return "se"
+        if t:          return "n"
+        if b:          return "s"
+        if l:          return "w"
+        if r:          return "e"
+        return None
+
+    def _on_edge_motion(self, e):
+        if self._resize_edge:
+            return
+        edge = self._get_edge(e.x, e.y)
+        cursors = {
+            "nw": "size_nw_se", "se": "size_nw_se",
+            "ne": "size_ne_sw", "sw": "size_ne_sw",
+            "n": "size_ns", "s": "size_ns",
+            "w": "size_we", "e": "size_we",
+        }
+        cursor = cursors.get(edge, "fleur" if e.y < 30 else "arrow")
+        if not edge and e.y < 30:
+            cursor = "fleur"
+        self.root.config(cursor=cursor)
+
+    def _on_edge_press(self, e):
+        edge = self._get_edge(e.x, e.y)
+        # 标题栏区域 (顶部非边缘区) 留给拖拽移动
+        if edge and not (e.y < 30 and edge in ("n", "ne", "nw") and e.y <= self._edge_width):
+            pass
+        if edge:
+            # 标题栏中间区域留给拖拽移动
+            if e.y <= 30 and edge == "n":
+                return
+            self._resize_edge = edge
+            self._resize_x = e.x_root
+            self._resize_y = e.y_root
+            self._resize_w = self.root.winfo_width()
+            self._resize_h = self.root.winfo_height()
+            return "break"
+
+    def _on_edge_drag(self, e):
+        if not self._resize_edge:
+            return
+        dx = e.x_root - self._resize_x
+        dy = e.y_root - self._resize_y
+        edge = self._resize_edge
+        new_w = self._resize_w
+        new_h = self._resize_h
+        new_x = self.root.winfo_x()
+        new_y = self.root.winfo_y()
+        min_w, min_h = 200, 140
+
+        if "e" in edge:
+            new_w = max(min_w, self._resize_w + dx)
+        if "s" in edge:
+            new_h = max(min_h, self._resize_h + dy)
+        if "w" in edge:
+            new_x = self._resize_x + dx
+            new_w = max(min_w, self._resize_w - dx)
+            if new_w == min_w:
+                new_x = self._resize_x + self._resize_w - min_w
+        if "n" in edge:
+            new_y = self._resize_y + dy
+            new_h = max(min_h, self._resize_h - dy)
+            if new_h == min_h:
+                new_y = self._resize_y + self._resize_h - min_h
+
+        self.root.geometry(f"{new_w}x{new_h}+{new_x}+{new_y}")
+        self.width = new_w
+        self.height = new_h
+
+    def _on_edge_release(self, e):
+        if self._resize_edge:
+            self._resize_edge = None
+            self._relayout()
+
+    def _relayout(self):
+        """窗口大小变化后重建布局"""
+        self.root.update_idletasks()
+        self.canvas.delete("corners", "bg_img", "countdown_text")
+        self._draw_corners()
+        self._apply_bg()
+        self.canvas.tag_raise("corners")
+        self._layout_countdown()
+        info_y = self._countdown_y + self._countdown_block_h + int(14 * self.scale)
+        self.target_info_lbl.place(y=info_y)
 
 
 if __name__ == "__main__":
