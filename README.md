@@ -15,21 +15,19 @@
 
 ### 方式一：一键启动 (Windows)
 
-双击 `启动倒计时.bat`，自动检测环境并安装依赖。
+双击 `start.bat`，自动检测环境并安装依赖。
 
 ### 方式二：命令行启动
 
 ```bash
-# 安装依赖
 pip install -r requirements.txt
 
-# 启动
 python countdown_widget.py
 ```
 
 ### 方式三：浏览器版本
 
-直接用浏览器打开 `index.html`，无需安装任何依赖（背景图片通过本地文件选择）。
+直接用浏览器打开 `index.html`，无需安装任何依赖。
 
 ## 功能说明
 
@@ -70,6 +68,3 @@ python countdown_widget.py
 └── README.md
 ```
 
-## License
-
-MIT
