@@ -257,102 +257,126 @@ class CountdownWidget:
     def _open_settings(self):
         win = tk.Toplevel(self.root)
         win.title("设置")
-        win.geometry("360x380")
+        win.geometry("360x440")
         win.resizable(False, False)
         win.configure(bg="#1e1e1e")
         win.attributes("-topmost", True)
 
         # 居中于主窗口
         wx = self.root.winfo_x() + (self.width - 360) // 2
-        wy = self.root.winfo_y() + (self.height - 380) // 2
+        wy = self.root.winfo_y() + (self.height - 440) // 2
         win.geometry(f"+{wx}+{wy}")
 
-        pad = {"padx": 16, "pady": 6}
         fg = "#cccccc"
         bg = "#1e1e1e"
         entry_bg = "#2a2a2a"
-        accent = self.settings["accent_color"]
         fs = ("Microsoft YaHei", 10)
 
+        # 滚动区域
+        canvas = tk.Canvas(win, bg=bg, highlightthickness=0, bd=0)
+        scrollbar = tk.Scrollbar(win, orient="vertical", command=canvas.yview)
+        scroll_frame = tk.Frame(canvas, bg=bg)
+
+        scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+
+        canvas.create_window((0, 0), window=scroll_frame, anchor="nw", width=340)
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True, padx=(8, 0), pady=8)
+        scrollbar.pack(side="right", fill="y", padx=(0, 4), pady=8)
+
+        # 鼠标滚轮支持
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        win.bind("<MouseWheel>", _on_mousewheel)
+        # 当鼠标在 canvas 上时也绑定
+        canvas.bind("<Enter>", lambda e: canvas.bind_all("<MouseWheel>", _on_mousewheel))
+        canvas.bind("<Leave>", lambda e: canvas.unbind_all("<MouseWheel>"))
+
+        pad = {"padx": 12, "pady": 4}
+
         # --- 目标日期 ---
-        tk.Label(win, text="目标日期", fg=fg, bg=bg, font=fs).pack(anchor="w", **pad)
-        date_frame = tk.Frame(win, bg=bg)
-        date_frame.pack(fill="x", padx=16, pady=(0, 4))
+        tk.Label(scroll_frame, text="目标日期", fg=fg, bg=bg, font=fs).pack(anchor="w", **pad)
+        date_frame = tk.Frame(scroll_frame, bg=bg)
+        date_frame.pack(fill="x", padx=12, pady=(0, 2))
 
         date_var = tk.StringVar(value=self.settings.get("target_date", ""))
         date_entry = tk.Entry(date_frame, textvariable=date_var, bg=entry_bg,
                               fg=fg, insertbackground=fg, font=fs,
-                              relief="flat", bd=8)
+                              relief="flat", bd=6)
         date_entry.pack(side="left", fill="x", expand=True)
 
         tk.Button(date_frame, text="快速设定",
                   bg="#333333", fg=fg, font=("", 9), relief="flat", bd=0,
-                  padx=10, pady=4, cursor="hand2",
-                  command=lambda: self._quick_date(win, date_var)).pack(side="right", padx=(6, 0))
+                  padx=8, pady=3, cursor="hand2",
+                  command=lambda: self._quick_date(win, date_var)).pack(side="right", padx=(4, 0))
 
         # --- 文字颜色 ---
-        tk.Label(win, text="文字颜色", fg=fg, bg=bg, font=fs).pack(anchor="w", **pad)
-        tc_btn = tk.Button(win, text="　　", bg=self.settings["text_color"],
+        tk.Label(scroll_frame, text="文字颜色", fg=fg, bg=bg, font=fs).pack(anchor="w", **pad)
+        tc_btn = tk.Button(scroll_frame, text="　　", bg=self.settings["text_color"],
                            relief="flat", bd=1, cursor="hand2",
                            command=lambda: self._pick_color_entry(win, tc_btn, "text_color"))
-        tc_btn.pack(anchor="w", padx=16, pady=(0, 4))
+        tc_btn.pack(anchor="w", padx=12, pady=(0, 2))
 
         # --- 强调色 ---
-        tk.Label(win, text="强调色 (数字颜色)", fg=fg, bg=bg, font=fs).pack(anchor="w", **pad)
-        ac_btn = tk.Button(win, text="　　", bg=self.settings["accent_color"],
+        tk.Label(scroll_frame, text="强调色 (数字颜色)", fg=fg, bg=bg, font=fs).pack(anchor="w", **pad)
+        ac_btn = tk.Button(scroll_frame, text="　　", bg=self.settings["accent_color"],
                            relief="flat", bd=1, cursor="hand2",
                            command=lambda: self._pick_color_entry(win, ac_btn, "accent_color"))
-        ac_btn.pack(anchor="w", padx=16, pady=(0, 4))
+        ac_btn.pack(anchor="w", padx=12, pady=(0, 2))
 
         # --- 背景图片 ---
-        tk.Label(win, text="背景图片", fg=fg, bg=bg, font=fs).pack(anchor="w", **pad)
-        bg_frame = tk.Frame(win, bg=bg)
-        bg_frame.pack(fill="x", padx=16, pady=(0, 4))
-        tk.Button(bg_frame, text="选择图片...", bg="#333333", fg=fg, font=("", 9),
-                  relief="flat", padx=12, pady=4, cursor="hand2",
+        tk.Label(scroll_frame, text="背景图片", fg=fg, bg=bg, font=fs).pack(anchor="w", **pad)
+        bg_f = tk.Frame(scroll_frame, bg=bg)
+        bg_f.pack(fill="x", padx=12, pady=(0, 2))
+        tk.Button(bg_f, text="选择图片...", bg="#333333", fg=fg, font=("", 9),
+                  relief="flat", padx=10, pady=3, cursor="hand2",
                   command=lambda: self._select_bg(win)).pack(side="left")
-        tk.Button(bg_frame, text="清除", bg="#441111", fg="#cc6666", font=("", 9),
-                  relief="flat", padx=12, pady=4, cursor="hand2",
-                  command=lambda: self._clear_bg(win)).pack(side="left", padx=(6, 0))
+        tk.Button(bg_f, text="清除", bg="#441111", fg="#cc6666", font=("", 9),
+                  relief="flat", padx=10, pady=3, cursor="hand2",
+                  command=lambda: self._clear_bg(win)).pack(side="left", padx=(4, 0))
 
         # --- 背景不透明度 ---
-        tk.Label(win, text="背景不透明度", fg=fg, bg=bg, font=fs).pack(anchor="w", **pad)
-        bg_op_scale = tk.Scale(win, from_=0, to=100, orient="horizontal",
+        tk.Label(scroll_frame, text="背景不透明度", fg=fg, bg=bg, font=fs).pack(anchor="w", **pad)
+        bg_op_scale = tk.Scale(scroll_frame, from_=0, to=100, orient="horizontal",
                                bg=bg, fg=fg, troughcolor="#2a2a2a",
-                               highlightthickness=0, bd=0, length=320,
+                               highlightthickness=0, bd=0, length=300,
                                variable=tk.IntVar(value=self.settings["bg_opacity"]),
                                command=lambda v: self._on_opacity_change("bg_opacity", int(v)))
-        bg_op_scale.pack(fill="x", padx=16, pady=(0, 4))
+        bg_op_scale.pack(fill="x", padx=12, pady=(0, 2))
 
         # --- 叠加层不透明度 ---
-        tk.Label(win, text="叠加层不透明度", fg=fg, bg=bg, font=fs).pack(anchor="w", **pad)
-        ov_op_scale = tk.Scale(win, from_=0, to=100, orient="horizontal",
+        tk.Label(scroll_frame, text="叠加层不透明度", fg=fg, bg=bg, font=fs).pack(anchor="w", **pad)
+        ov_op_scale = tk.Scale(scroll_frame, from_=0, to=100, orient="horizontal",
                                bg=bg, fg=fg, troughcolor="#2a2a2a",
-                               highlightthickness=0, bd=0, length=320,
+                               highlightthickness=0, bd=0, length=300,
                                variable=tk.IntVar(value=self.settings["overlay_opacity"]),
                                command=lambda v: self._on_opacity_change("overlay_opacity", int(v)))
-        ov_op_scale.pack(fill="x", padx=16, pady=(0, 4))
+        ov_op_scale.pack(fill="x", padx=12, pady=(0, 2))
 
         # --- 窗口缩放 ---
-        tk.Label(win, text="窗口缩放", fg=fg, bg=bg, font=fs).pack(anchor="w", **pad)
-        scale_scale = tk.Scale(win, from_=50, to=150, orient="horizontal",
+        tk.Label(scroll_frame, text="窗口缩放", fg=fg, bg=bg, font=fs).pack(anchor="w", **pad)
+        scale_scale = tk.Scale(scroll_frame, from_=50, to=150, orient="horizontal",
                                bg=bg, fg=fg, troughcolor="#2a2a2a",
-                               highlightthickness=0, bd=0, length=320,
+                               highlightthickness=0, bd=0, length=300,
                                variable=tk.IntVar(value=self.settings["widget_scale"]),
                                command=lambda v: self._on_scale_change(int(v)))
-        scale_scale.pack(fill="x", padx=16, pady=(0, 4))
+        scale_scale.pack(fill="x", padx=12, pady=(0, 2))
 
         # --- 置顶 ---
         top_var = tk.BooleanVar(value=self.settings.get("always_on_top", False))
-        tk.Checkbutton(win, text="窗口置顶", variable=top_var,
+        tk.Checkbutton(scroll_frame, text="窗口置顶", variable=top_var,
                        bg=bg, fg=fg, selectcolor="#2a2a2a", font=fs,
                        activebackground=bg, activeforeground=fg,
-                       command=lambda: self._toggle_top(top_var.get())).pack(anchor="w", padx=16, pady=(4, 0))
+                       command=lambda: self._toggle_top(top_var.get())).pack(anchor="w", padx=12, pady=(2, 0))
 
-        # --- 关闭按钮 ---
-        tk.Button(win, text="完成", bg="#333333", fg=fg, font=fs,
-                  relief="flat", padx=24, pady=6, cursor="hand2",
-                  command=lambda: [self._save_from_ui(win, date_var), win.destroy()]).pack(pady=(14, 0))
+        # --- 按钮区 ---
+        btn_frame = tk.Frame(scroll_frame, bg=bg)
+        btn_frame.pack(fill="x", padx=12, pady=(12, 8))
+        tk.Button(btn_frame, text="完成", bg="#333333", fg=fg, font=fs,
+                  relief="flat", padx=20, pady=5, cursor="hand2",
+                  command=lambda: [self._save_from_ui(win, date_var), win.destroy()]).pack()
 
     def _quick_date(self, parent, date_var):
         """快速设定日期对话框"""
