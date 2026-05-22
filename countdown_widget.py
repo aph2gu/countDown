@@ -14,6 +14,7 @@ DEFAULTS = {
     "target_date": "",
     "text_color": "#ffffff",
     "accent_color": "#00e5ff",
+    "bg_color": "#111111",
     "bg_image": "",
     "bg_opacity": 40,
     "overlay_opacity": 45,
@@ -72,28 +73,23 @@ class CountdownWidget:
             self.root.attributes("-topmost", True)
 
         # ---- 单一 Canvas 承载所有内容 ----
-        self.canvas = tk.Canvas(self.root, bg="#111111", highlightthickness=0, bd=0)
+        init_bg = self.settings.get("bg_color", "#111111")
+        self.canvas = tk.Canvas(self.root, bg=init_bg, highlightthickness=0, bd=0)
         self.canvas.place(x=0, y=0, relwidth=1, relheight=1)
 
-        # 背景图 + 叠加暗层 + 圆角遮罩（全在 canvas 上）
-        self._bg_photo = None
-        self._bg_img_obj = None
-        self.root.update_idletasks()
-        self._draw_all_canvas()
-
         # ---- 标题栏 (拖拽区) ----
-        self.title_bar = tk.Frame(self.root, bg="#111111", bd=0, cursor="fleur")
+        self.title_bar = tk.Frame(self.root, bg=init_bg, bd=0, cursor="fleur")
         self.title_bar.place(x=0, y=0, relwidth=1, height=30)
         self.title_bar.bind("<Button-1>", self._drag_start)
         self.title_bar.bind("<B1-Motion>", self._drag_move)
 
-        tk.Label(self.title_bar, text="Countdown", fg="#777777", bg="#111111",
+        tk.Label(self.title_bar, text="Countdown", fg="#777777", bg=init_bg,
                  font=("Microsoft YaHei", 9)).place(x=10, y=5)
 
-        btn_frame = tk.Frame(self.title_bar, bg="#111111")
+        btn_frame = tk.Frame(self.title_bar, bg=init_bg)
         btn_frame.place(relx=1.0, x=-108, y=3, width=100, height=24, anchor="ne")
 
-        self.pin_btn = tk.Label(btn_frame, text="📍", fg="#aaaaaa", bg="#111111",
+        self.pin_btn = tk.Label(btn_frame, text="📍", fg="#aaaaaa", bg=init_bg,
                                 font=("", 10), cursor="hand2")
         self.pin_btn.pack(side="right", padx=1)
         self.pin_btn.bind("<Button-1>", lambda e: self._toggle_pin())
@@ -104,7 +100,7 @@ class CountdownWidget:
         for char, cmd in [("⚙", lambda e: self._open_settings()),
                           ("─", lambda e: self.root.iconify()),
                           ("✕", lambda e: self._on_close())]:
-            btn = tk.Label(btn_frame, text=char, fg="#aaaaaa", bg="#111111",
+            btn = tk.Label(btn_frame, text=char, fg="#aaaaaa", bg=init_bg,
                            font=("", 11 if char == "⚙" else 10), cursor="hand2")
             btn.pack(side="right", padx=1)
             btn.bind("<Button-1>", cmd)
@@ -112,22 +108,28 @@ class CountdownWidget:
 
         # ---- 倒计时数字 (置于 canvas 上层) ----
         self.days_lbl = tk.Label(self.root, text="00", font=("Consolas", 52, "bold"),
-                                 fg=self.settings["accent_color"], bg="#111111", bd=0)
+                                 fg=self.settings["accent_color"], bg=init_bg, bd=0)
         self.hours_lbl = tk.Label(self.root, text="00", font=("Consolas", 52, "bold"),
-                                  fg=self.settings["accent_color"], bg="#111111", bd=0)
+                                  fg=self.settings["accent_color"], bg=init_bg, bd=0)
         self.mins_lbl = tk.Label(self.root, text="00", font=("Consolas", 52, "bold"),
-                                 fg=self.settings["accent_color"], bg="#111111", bd=0)
+                                 fg=self.settings["accent_color"], bg=init_bg, bd=0)
         self.secs_lbl = tk.Label(self.root, text="00", font=("Consolas", 52, "bold"),
-                                 fg=self.settings["accent_color"], bg="#111111", bd=0)
+                                 fg=self.settings["accent_color"], bg=init_bg, bd=0)
         self._unit_labels = []
         self._sep_labels = []
 
         self.target_info_lbl = tk.Label(
-            self.root, text="", fg=self.settings["text_color"], bg="#111111",
+            self.root, text="", fg=self.settings["text_color"], bg=init_bg,
             font=("Microsoft YaHei", int(11 * self.scale)), bd=0,
         )
 
         self._layout_countdown()
+
+        # 背景图 + 叠加暗层 + 圆角遮罩（全在 canvas 上，在所有控件之后）
+        self._bg_photo = None
+        self._bg_img_obj = None
+        self.root.update_idletasks()
+        self._draw_all_canvas()
 
         # ---- 边缘缩放 ----
         self._resize_edge = None
@@ -156,10 +158,12 @@ class CountdownWidget:
 
     # ====== Canvas 绘制 ======
     def _draw_all_canvas(self):
-        """重绘 canvas 中所有内容：背景图、暗层、圆角"""
+        """重绘 canvas：背景色 → 背景图 → 半透明叠加层 → 圆角"""
         self.canvas.delete("all")
         w = self.root.winfo_width() or self.width
         h = self.root.winfo_height() or self.height
+        bg_color = self.settings.get("bg_color", "#111111")
+        self.canvas.configure(bg=bg_color)
 
         # 1. 背景图片
         path = self.settings.get("bg_image", "")
@@ -179,10 +183,12 @@ class CountdownWidget:
                 print("[背景加载失败]")
                 traceback.print_exc()
 
-        # 2. 叠加暗层 (canvas 半透明矩形)
-        alpha = int(self.settings["overlay_opacity"] / 100 * 220)
-        color = f"#{alpha:02x}{alpha:02x}{alpha:02x}"
-        self.canvas.create_rectangle(0, 0, w, h, fill=color, outline="", tags="overlay")
+        # 2. 叠加暗层 — 用 PIL 生成半透明 RGBA 图片 (canvas fill 不支持 alpha)
+        ov = self.settings.get("overlay_opacity", 45)
+        alpha = int(ov / 100 * 255)
+        ov_img = Image.new("RGBA", (w, h), (0, 0, 0, alpha))
+        self._ov_photo = ImageTk.PhotoImage(ov_img)
+        self.canvas.create_image(0, 0, anchor="nw", image=self._ov_photo, tags="overlay")
 
         # 3. 圆角遮罩
         r = 16
@@ -191,6 +197,30 @@ class CountdownWidget:
                 x - r, y - r, x + r, y + r,
                 start=0, extent=90, fill="#010101", outline="#010101", tags="corners",
             )
+
+        # 更新所有 Label 的背景色以匹配
+        new_bg = bg_color
+        for widget in [self.title_bar, self.days_lbl, self.hours_lbl,
+                       self.mins_lbl, self.secs_lbl, self.target_info_lbl]:
+            try:
+                widget.configure(bg=new_bg)
+            except Exception:
+                pass
+        # 递归更新 title_bar 内所有子控件
+        def _update_bg_recursive(parent):
+            for child in parent.winfo_children():
+                try:
+                    child.configure(bg=new_bg)
+                except Exception:
+                    pass
+                _update_bg_recursive(child)
+        _update_bg_recursive(self.title_bar)
+        # 更新 unit/sep 标签
+        for lbl in self._unit_labels + self._sep_labels:
+            try:
+                lbl.configure(bg=new_bg)
+            except Exception:
+                pass
 
     # ====== 布局倒计时 ======
     def _layout_countdown(self):
@@ -211,6 +241,7 @@ class CountdownWidget:
 
         tc = self.settings["text_color"]
         ac = self.settings["accent_color"]
+        bg = self.settings.get("bg_color", "#111111")
 
         # 清理旧的辅助标签
         for lbl in self._unit_labels + self._sep_labels:
@@ -226,16 +257,16 @@ class CountdownWidget:
         for i, (lbl, unit_text) in enumerate(data):
             x = sx + i * (u + sep)
             lbl.place_forget()
-            lbl.configure(font=("Consolas", fs, "bold"), fg=ac, bg="#111111")
+            lbl.configure(font=("Consolas", fs, "bold"), fg=ac, bg=bg)
             lbl.place(x=x, y=y, width=u, height=fs + 10)
 
-            ul = tk.Label(self.root, text=unit_text, fg=tc, bg="#111111", bd=0,
+            ul = tk.Label(self.root, text=unit_text, fg=tc, bg=bg, bd=0,
                           font=("Microsoft YaHei", ls))
             ul.place(x=x, y=y + fs + 5, width=u, height=ls + 8)
             self._unit_labels.append(ul)
 
             if i < 3:
-                sl = tk.Label(self.root, text=":", fg=tc, bg="#111111", bd=0,
+                sl = tk.Label(self.root, text=":", fg=tc, bg=bg, bd=0,
                               font=("Consolas", sep_fs))
                 sl.place(x=x + u, y=y - 2, width=sep, height=sep_fs + 10)
                 self._sep_labels.append(sl)
@@ -245,7 +276,7 @@ class CountdownWidget:
         self.target_info_lbl.place_forget()
         self.target_info_lbl.configure(
             font=("Microsoft YaHei", int(11 * self.scale)),
-            fg=self.settings["text_color"], bg="#111111",
+            fg=self.settings["text_color"], bg=bg,
         )
         self.target_info_lbl.place(x=0, y=info_y, relwidth=1)
 
@@ -338,7 +369,9 @@ class CountdownWidget:
         return None
 
     # ====== Hover ======
-    def _bind_hover(self, widget, hover_color, base_color="#111111"):
+    def _bind_hover(self, widget, hover_color, base_color=None):
+        if base_color is None:
+            base_color = self.settings.get("bg_color", "#111111")
         widget.bind("<Enter>", lambda e: widget.configure(bg=hover_color))
         widget.bind("<Leave>", lambda e: widget.configure(bg=base_color))
 
@@ -409,6 +442,13 @@ class CountdownWidget:
                            relief="flat", bd=1, cursor="hand2",
                            command=lambda: self._pick_color(win, ac_btn, "accent_color"))
         ac_btn.pack(anchor="w", padx=12, pady=(0, 2))
+
+        # 背景颜色
+        tk.Label(scroll_frame, text="背景颜色", fg=fg, bg=bg_color, font=fs).pack(anchor="w", **pad)
+        bgc_btn = tk.Button(scroll_frame, text="　　", bg=self.settings.get("bg_color", "#111111"),
+                            relief="flat", bd=1, cursor="hand2",
+                            command=lambda: self._pick_bgcolor(win, bgc_btn))
+        bgc_btn.pack(anchor="w", padx=12, pady=(0, 2))
 
         # 背景图片
         tk.Label(scroll_frame, text="背景图片", fg=fg, bg=bg_color, font=fs).pack(anchor="w", **pad)
@@ -495,6 +535,18 @@ class CountdownWidget:
             self.settings[key] = result[1]
             btn.configure(bg=result[1])
             self._apply_colors()
+
+    def _pick_bgcolor(self, parent, btn):
+        result = colorchooser.askcolor(
+            color=self.settings.get("bg_color", "#111111"),
+            title="选择背景颜色", parent=parent,
+        )
+        if result and result[1]:
+            self.settings["bg_color"] = result[1]
+            btn.configure(bg=result[1])
+            save_settings(self.settings)
+            self._draw_all_canvas()
+            self._layout_countdown()
 
     def _select_bg(self, parent):
         path = filedialog.askopenfilename(
