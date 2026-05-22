@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>倒计时</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- 背景图层 -->
+  <div id="bg-layer"></div>
+
+  <!-- 拖拽区域 -->
+  <div id="drag-bar">
+    <span id="title-label">Countdown</span>
+    <div id="win-controls">
+      <button id="btn-pin" title="置顶" class="ctrl-btn">📌</button>
+      <button id="btn-settings" title="设置" class="ctrl-btn">⚙</button>
+      <button id="btn-min" title="最小化" class="ctrl-btn">─</button>
+      <button id="btn-close" title="关闭" class="ctrl-btn ctrl-close">✕</button>
+    </div>
+  </div>
+
+  <!-- 设置面板 -->
+  <div id="settings-panel" class="hidden">
+    <div class="settings-row">
+      <label>目标日期</label>
+      <input type="datetime-local" id="input-target" />
+    </div>
+    <div class="settings-row">
+      <label>文字颜色</label>
+      <input type="color" id="input-text-color" value="#ffffff" />
+    </div>
+    <div class="settings-row">
+      <label>强调色</label>
+      <input type="color" id="input-accent-color" value="#00e5ff" />
+    </div>
+    <div class="settings-row">
+      <label>背景图片</label>
+      <div class="bg-actions">
+        <input type="file" id="input-bg-file" accept="image/*" style="display:none" />
+        <button id="btn-bg-select" class="action-btn">选择图片</button>
+        <button id="btn-bg-clear" class="action-btn action-danger">清除</button>
+      </div>
+    </div>
+    <div class="settings-row">
+      <label>背景不透明度</label>
+      <input type="range" id="input-bg-opacity" min="0" max="100" value="40" />
+    </div>
+    <div class="settings-row">
+      <label>叠加层不透明度</label>
+      <input type="range" id="input-overlay-opacity" min="0" max="100" value="45" />
+    </div>
+    <div class="settings-row">
+      <label>窗口缩放</label>
+      <input type="range" id="input-scale" min="50" max="150" value="100" />
+    </div>
+    <button id="btn-close-settings" class="action-btn">关闭设置</button>
+  </div>
+
+  <!-- 倒计时主体 -->
+  <div id="countdown-display">
+    <div class="time-unit">
+      <span id="days" class="time-value">00</span>
+      <span class="time-label">天</span>
+    </div>
+    <span class="time-sep">:</span>
+    <div class="time-unit">
+      <span id="hours" class="time-value">00</span>
+      <span class="time-label">时</span>
+    </div>
+    <span class="time-sep">:</span>
+    <div class="time-unit">
+      <span id="minutes" class="time-value">00</span>
+      <span class="time-label">分</span>
+    </div>
+    <span class="time-sep">:</span>
+    <div class="time-unit">
+      <span id="seconds" class="time-value">00</span>
+      <span class="time-label">秒</span>
+    </div>
+  </div>
+  <div id="target-label"></div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
