@@ -5,7 +5,7 @@
 ## 效果预览
 ![浏览器倒计时](./img/index_pic.png)
 ![桌面倒计时](./img/py_pic.png)
-- 无边框圆角窗口，可拖拽移动
+- 无边框窗口，可拖拽移动
 - 实时显示 天 / 时 / 分 / 秒
 - 支持自定义背景图片 + 暗色叠加层
 - 文字颜色、强调色自由调整
@@ -63,7 +63,7 @@ python countdown_widget.py
 ├── index.html            # 浏览器版主页面
 ├── renderer.js           # 浏览器版倒计时逻辑
 ├── style.css             # 浏览器版样式
-├── 启动倒计时.bat         # Windows 一键启动脚本
+├── start.bat         # Windows 一键启动脚本
 ├── requirements.txt      # Python 依赖
 └── README.md
 ```
